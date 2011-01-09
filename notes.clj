@@ -1,52 +1,72 @@
 (ns notes
     (:import 
-      (jcurses.widgets.Window)
-      (jcurses.widgets.Panel)
-      (jcurses.widgets.TextArea)))
+      (jcurses.system.Toolkit)
+      (jcurses.system.InputChar)
+      (jcurses.system.CharColor)))
+
+(declare _command_stack)
+(declare _buffer)
+(declare _x _y)
 
 (def _command_stack {})
+(def _buffer {})
 (def _x 0)
 (def _y 0)
 
 (def COMMAND_MODE 0)
 (def INSERT_MODE 2)
 
-(defn exit [window]
-      (.close window))
+
+;should be read from a config file
+(def __text_color (new jcurses.system.CharColor (jcurses.system.CharColor/BLACK) (jcurses.system.CharColor/WHITE)))
+
+(declare construct_toolbar)
+(declare update)
+(declare read_key)
+(declare process_command)
+(declare process_insert)
+(declare process)
+
+(defn construct_toolbar [mode]
+      (let
+        [p (str "Position: " 
+                (java.lang.Integer/toString _y) "," (java.lang.Integer/toString _x)) 
+           m (str "Mode: " 
+                  (cond (= mode COMMAND_MODE) "Command" (= mode INSERT_MODE) "Insert"))]
+        (str p " " m)))
+
+(defn update [mode]
+      (let
+        [height (- (jcurses.system.Toolkit/getScreenHeight) 1)]
+        (jcurses.system.Toolkit/printString (construct_toolbar mode) 0 height __text_color)))
 
 (defn read_key []
-      ;needs a lot of work here..
-      (println (read-line))
-)
+      (jcurses.system.Toolkit/readCharacter))
 
-(defn process_command [window x y input_key]
-      ;command mode: to be filled out
-      )
+(defn process_command [x y input_key]
+      (do
+        (jcurses.system.Toolkit/clearScreen __text_color)
 
-(defn process_insert [window x y input_key]
-      ;insert mode: to be filled out
-      )
+        ;display key code
+        (jcurses.system.Toolkit/printString (java.lang.Integer/toString (.getCode input_key)) x y __text_color)))
 
-(defn process [window x y input_key mode]
-      (if input_key
-        (cond
-          (= mode COMMAND_MODE)
-          (process_command window x y input_key)
-          (= mode INSERT_MODE)
-          (process_insert window x y input_key))
-        ;
-        (process window x y (read_key) mode))
-      (.repaint window))
-        
+(defn process_insert [x y input_key])
+
+(defn process [x y input_key mode]
+      (do
+        (if input_key
+          (cond
+            (= mode COMMAND_MODE)
+            (process_command x y input_key)
+            (= mode INSERT_MODE)
+            (process_insert x y input_key)))
+        (update mode)
+        (process x y (read_key) mode)))
 
 (defn main []
-      (let
-        ;window should be a custom class i believe
-        [window (new jcurses.widgets.Window 80 40 true "Clojure Notes")]
-        (.setShadow window false)
-        ;no addWidget method?
-        ;(.addWidget (.getRootPanel window) (new jcurses.widgets.TextArea 80 40 "hello") nil)
-        (.show window)
-        (process window 0 0 nil COMMAND_MODE)))
+      (do
+        ;required
+        (jcurses.system.Toolkit/init)
+        (process 0 0 nil COMMAND_MODE)))
 
 (main)

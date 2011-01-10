@@ -105,7 +105,6 @@
 
 ;returns sequence with head being new x and y coordinates
 (defn- process-initial-last-line-position [pos mode command_stack]
-;       [[0 0] [0 0]])
        (let [x (+ 4 (.length (construct-toolbar (first (last pos)) (second (last pos)) mode command_stack)))
                y (- (getScreenHeight) 1)]
          (cons [x y] pos)))

@@ -30,6 +30,8 @@
 ;should be read from a config file
 (def __text_color (new jcurses.system.CharColor (jcurses.system.CharColor/BLACK) (jcurses.system.CharColor/WHITE)))
 
+(def __error_color (new jcurses.system.CharColor (jcurses.system.CharColor/WHITE) (jcurses.system.CharColor/RED)))
+
 ;Toolkit calls
 (defn init []
   (jcurses.system.Toolkit/init))
@@ -129,7 +131,7 @@
       command_stack
 
       :else
-      (conj command_stack (.toString input_key)))
+      (concat command_stack (.toString input_key)))
     (cond
       (= (.getCode input_key) KEY_BACKSPACE)
       (drop-last command_stack))))
@@ -147,17 +149,23 @@
 
 ;COMMAND
 ;evaluate whatever is on the stack (print error if invalid)
-(defn- command-evaluate-command-stack [pos command_stack] pos)
+(defn- command-evaluate-command-stack [pos command_stack] 
+  (let [c (str "invalid command: " (_command-stack-helper command_stack))]
+    (printString c 0 (- (getScreenHeight) 1) __error_color)
+    (readCharacter)
+    pos))
 
 ;drop the last element in the stack
-(defn- command-backspace-command-stack [command_stack] command_stack)
+(defn- command-backspace-command-stack [command_stack]
+  (drop-last command_stack))
 
 ;go back one position
-(defn- command-backspace-update-position [pos] pos)
+(defn- command-backspace-update-position [pos]
+  (cons [(- (_get_x pos) 1) (_get_y pos)] (rest pos)))
 
 ;update to toolbar position
 (defn- command-update-position [pos input_key]
-     (cons [(+ (_get_x pos) 1) (_get_y pos)] (rest pos)))
+  (cons [(+ (_get_x pos) 1) (_get_y pos)] (rest pos)))
 
 ;INSERT
 ;put into buffer
@@ -221,9 +229,6 @@
           (cond
             ;COMMAND_MODE special codes
             ;
-            ;need backspace too
-            ;and return
-
             (= (.getCode r_input_key) KEY_RETURN)
             (let [n_pos (command-evaluate-command-stack r_pos r_command_stack)]
               (update n_pos COMMAND_MODE r_input_key r_command_stack)
@@ -231,9 +236,16 @@
 
             (= (.getCode r_input_key) KEY_BACKSPACE)
             (let [n_command_stack (command-backspace-command-stack r_command_stack)]
-              (let [n_pos (command-backspace-update-position r_pos)]
-                (update n_pos COMMAND_MODE r_input_key n_command_stack)
-                (recur n_pos COMMAND_MODE (readCharacter) n_command_stack)))
+              (cond
+                (> (.length (vec n_command_stack)) 0)
+                (let [n_pos (command-backspace-update-position r_pos)]
+                  (update n_pos COMMAND_MODE r_input_key n_command_stack)
+                  (recur n_pos COMMAND_MODE (readCharacter) n_command_stack))
+
+                :else
+                (let [n_pos [(last r_pos)]]
+                  (update n_pos NORMAL_MODE r_input_key [])
+                  (recur n_pos NORMAL_MODE (readCharacter) n_command_stack))))
 
             :else
             (let [n_command_stack (generic-push-command-stack r_input_key r_command_stack)]

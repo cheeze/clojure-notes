@@ -6,7 +6,9 @@
 
 ;constants
 (def COMMAND_MODE 0)
+(def LAST_LINE_MODE 1)
 (def INSERT_MODE 2)
+(def VISUAL_MODE 3)
 
 ;key codes
 (def KEY_RETURN 10)

@@ -167,6 +167,7 @@
                         (recur n_pos LAST_LINE_MODE (readCharacter) n_command_stack)))
 
                     ;need backspace too
+                    ;and return
 
                     :else
                     (let [n_command_stack (conj r_command_stack (.toString r_input_key))]

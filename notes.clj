@@ -158,13 +158,6 @@
                   (cond
                     ;LAST_LINE_MODE special codes
                     ;
-                    ;reset LAST_LINE_MODE
-                    (= (.getCode r_input_key) KEY_COLON)
-                    (let [n_command_stack (conj [] (.toString r_input_key))]
-                      (let [n_pos (process-initial-last-line-position r_pos r_mode n_command_stack)]
-                        (update n_pos LAST_LINE_MODE r_input_key n_command_stack)
-                        (recur n_pos LAST_LINE_MODE (readCharacter) n_command_stack)))
-
                     ;need backspace too
                     ;and return
 

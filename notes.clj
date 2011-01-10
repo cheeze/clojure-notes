@@ -5,6 +5,15 @@
       (jcurses.system.CharColor)))
 
 ;constants
+(def COMMAND_STACK "command stack: ")
+(def CURRENT_POSITION "curr pos: ")
+(def CURRENT_MODE "curr mode: ")
+
+(def COMMAND "Command")
+(def LAST_LINE "Last Line")
+(def INSERT "Insert")
+(def VISUAL "Visual")
+
 (def COMMAND_MODE 0)
 (def LAST_LINE_MODE 1)
 (def INSERT_MODE 2)
@@ -55,16 +64,16 @@
 (defn- _mode-helper [mode]
        (cond 
          (= mode COMMAND_MODE)
-         "Command"
+         COMMAND
 
          (= mode LAST_LINE_MODE)
-         "Last Line"
+         LAST_LINE
 
          (= mode INSERT_MODE)
-         "Insert"
+         INSERT
 
          (= mode VISUAL_MODE)
-         "Visual"))
+         VISUAL))
 
 (defn- _key-code-helper [input_key]
        (if (not (= input_key nil)) (java.lang.Integer/toString (.getCode input_key)) "nil" ))
@@ -78,10 +87,21 @@
 
 (defn construct-toolbar [x y mode command_stack]
       (let
-        [p (str "Position: " (_position-helper x y))
-           m (str "Mode: " (_mode-helper mode))
-           c (str "Command Stack: " (_command-stack-helper command_stack))]
-        (str p " - " m " - " c)))
+        [p (str CURRENT_POSITION (_position-helper x y))
+           m (str CURRENT_MODE (_mode-helper mode))
+           c (str COMMAND_STACK (_command-stack-helper command_stack))]
+        (cond
+          (= mode COMMAND_MODE)
+          (str p " - " m " - " c)
+
+          (= mode LAST_LINE_MODE)
+          c
+
+          (= mode INSERT_MODE)
+          (str p " - " m)
+
+          (= mode VISUAL_MODE)
+          (str p " - " m " - " c))))
 
 (defn- _get_x [pos]
        (first (first pos)))
@@ -105,7 +125,7 @@
 
 ;returns sequence with head being new x and y coordinates
 (defn- process-initial-last-line-position [pos mode command_stack]
-       (let [x (+ 4 (.length (construct-toolbar (first (last pos)) (second (last pos)) mode command_stack)))
+       (let [x (+ 1 (.length COMMAND_STACK))
                y (- (getScreenHeight) 1)]
          (cons [x y] pos)))
 
@@ -116,7 +136,7 @@
 ;returns new x and y coordinates
 (defn process-insert [pos input_key]
       (do
-        (printString (.toString input_key) (_get_x pos) (_get_y pos) __text_color)
+        ;needs work
         [[(+ 1 (_get_x pos)) (_get_y pos)]]))
 
 (defn process [pos mode input_key command_stack]
@@ -190,9 +210,7 @@
                       (recur r_pos r_mode (readCharacter) r_command_stack)))))
               (do
                 (update r_pos r_mode r_input_key r_command_stack)
-                (recur r_pos r_mode (readCharacter) r_command_stack))))
-      ;properly exit here if something goes wrong
-      nil)
+                (recur r_pos r_mode (readCharacter) r_command_stack)))))
 
 (defn main []
       (do

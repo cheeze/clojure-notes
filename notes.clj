@@ -27,6 +27,9 @@
 (def KEY_V 118)
 (def KEY_BACKSPACE 263)
 
+;misc keys
+(def ANCHOR 0)
+
 ;should be read from a config file
 (def __text_color (new jcurses.system.CharColor (jcurses.system.CharColor/BLACK) (jcurses.system.CharColor/WHITE)))
 
@@ -113,7 +116,7 @@
 (defn- _get_y [pos]
   (second (first pos)))
 
-(defn- update [pos mode input_key command_stack]
+(defn- update [buffer pos mode input_key command_stack misc]
   (do
     (clearScreen __text_color)
     (let [toolbar (construct-toolbar (_get_x pos) (_get_y pos) mode command_stack)
@@ -168,30 +171,50 @@
   (cons [(+ (_get_x pos) 1) (_get_y pos)] (rest pos)))
 
 ;INSERT
-;put into buffer
+;update the position
 ;returns new x and y coordinates
-(defn- insert-process [pos input_key]
+(defn- insert-update-position [pos input_key]
   (cond
-    (and (= (.getCode input_key) KEY_BACKSPACE) (>= (_get_x pos) 0))
-    pos ;TODO: go up one level as well
+    (and (= (.getCode input_key) KEY_BACKSPACE) (= (_get_x pos) 0))
+    (if
+      (= (_get_y pos) 0)
+        pos
+        [[(_get_x pos) (- (_get_y pos) 1)]]) ;TODO: the x position needs to be at the edge
 
     (= (.getCode input_key) KEY_BACKSPACE)
     [[(- (_get_x pos) 1) (_get_y pos)]]
 
+    (= (.getCode input_key) KEY_RETURN)
+    [[0 (+ (_get_y pos) 1)]]
+
     :else
     [[(+ 1 (_get_x pos)) (_get_y pos)]]))
 
+(defn- insert-update-buffer [buffer pos input_key] 
+  (cond
+    (= (.getCode input_key) KEY_BACKSPACE)
+    (if
+      (= (_get_x pos) 0)
+        buffer
+        buffer)
+
+    (= (.getCode input_key) KEY_RETURN)
+    buffer
+
+    :else
+    buffer))
+
 ;main loop
-(defn- process [pos mode input_key command_stack]
-  (loop [r_pos pos r_mode mode r_input_key input_key r_command_stack command_stack]
+(defn- process [buffer pos mode input_key command_stack misc]
+  (loop [r_buffer buffer r_pos pos r_mode mode r_input_key input_key r_command_stack command_stack r_misc misc]
     (if r_input_key
       (cond
         ;GLOBAL special codes
         (= (.getCode r_input_key) KEY_ESC)
         (do
           (let [n_pos [(last r_pos)]]
-            (update n_pos NORMAL_MODE r_input_key [])
-            (recur n_pos NORMAL_MODE (readCharacter) [])))
+            (update r_buffer n_pos NORMAL_MODE r_input_key [] r_misc)
+            (recur r_buffer n_pos NORMAL_MODE (readCharacter) [] r_misc)))
 
         :else
         (cond
@@ -203,27 +226,27 @@
             (= (.getCode r_input_key) KEY_COLON)
             (let [n_command_stack (conj [] (.toString r_input_key))]
               (let [n_pos (normal-process-initial-command-position r_pos r_mode n_command_stack)]
-                (update n_pos COMMAND_MODE r_input_key n_command_stack)
-                (recur n_pos COMMAND_MODE (readCharacter) n_command_stack)))
+                (update r_buffer n_pos COMMAND_MODE r_input_key n_command_stack r_misc)
+                (recur r_buffer n_pos COMMAND_MODE (readCharacter) n_command_stack r_misc)))
 
             ;switch to INSERT_MODE
             (= (.getCode r_input_key) KEY_I)
             (do
-              (update r_pos INSERT_MODE r_input_key [])
-              (recur r_pos INSERT_MODE (readCharacter) []))
+              (update r_buffer r_pos INSERT_MODE r_input_key [] r_misc)
+              (recur r_buffer r_pos INSERT_MODE (readCharacter) [] r_misc))
 
             ;switch to VISUAL_MODE
             (= (.getCode r_input_key) KEY_V)
             (do
-              (update r_pos VISUAL_MODE r_input_key [])
-              (recur r_pos VISUAL_MODE (readCharacter) []))
+              (update r_buffer r_pos VISUAL_MODE r_input_key [] r_misc)
+              (recur r_buffer r_pos VISUAL_MODE (readCharacter) [] r_misc))
 
             ;push input_key onto stack and evaluate
             :else
             (let [n_command_stack (generic-push-command-stack r_input_key r_command_stack)]
               (let [n_pos (normal-evaluate-command-stack r_pos n_command_stack)]
-                (update n_pos r_mode r_input_key n_command_stack)
-                (recur n_pos r_mode (readCharacter) n_command_stack))))
+                (update r_buffer n_pos r_mode r_input_key n_command_stack r_misc)
+                (recur r_buffer n_pos r_mode (readCharacter) n_command_stack r_misc))))
 
           (= r_mode COMMAND_MODE)
           (cond
@@ -231,40 +254,38 @@
             ;
             (= (.getCode r_input_key) KEY_RETURN)
             (let [n_pos (command-evaluate-command-stack r_pos r_command_stack)]
-              (update n_pos COMMAND_MODE r_input_key r_command_stack)
-              (recur n_pos COMMAND_MODE (readCharacter) r_command_stack))
+              (update r_buffer n_pos COMMAND_MODE r_input_key r_command_stack r_misc)
+              (recur r_buffer n_pos COMMAND_MODE (readCharacter) r_command_stack r_misc))
 
             (= (.getCode r_input_key) KEY_BACKSPACE)
             (let [n_command_stack (command-backspace-command-stack r_command_stack)]
               (cond
                 (> (.length (vec n_command_stack)) 0)
                 (let [n_pos (command-backspace-update-position r_pos)]
-                  (update n_pos COMMAND_MODE r_input_key n_command_stack)
-                  (recur n_pos COMMAND_MODE (readCharacter) n_command_stack))
+                  (update r_buffer n_pos COMMAND_MODE r_input_key n_command_stack r_misc)
+                  (recur r_buffer n_pos COMMAND_MODE (readCharacter) n_command_stack r_misc))
 
                 :else
                 (let [n_pos [(last r_pos)]]
-                  (update n_pos NORMAL_MODE r_input_key [])
-                  (recur n_pos NORMAL_MODE (readCharacter) n_command_stack))))
+                  (update r_buffer n_pos NORMAL_MODE r_input_key [] r_misc)
+                  (recur r_buffer n_pos NORMAL_MODE (readCharacter) n_command_stack r_misc))))
 
             :else
             (let [n_command_stack (generic-push-command-stack r_input_key r_command_stack)]
               (let [n_pos (command-update-position r_pos r_input_key)]
-                (update n_pos COMMAND_MODE r_input_key n_command_stack)
-                (recur n_pos COMMAND_MODE (readCharacter) n_command_stack))))
+                (update r_buffer n_pos COMMAND_MODE r_input_key n_command_stack r_misc)
+                (recur r_buffer n_pos COMMAND_MODE (readCharacter) n_command_stack r_misc))))
 
           (= r_mode INSERT_MODE)
           (cond
             ;INSERT_MODE special codes
             ;
-            ;press enter
-            (= (.getCode r_input_key) KEY_RETURN)
-            nil
 
             :else
-            (let [n_pos (insert-process r_pos r_input_key)]
-              (update n_pos r_mode r_input_key r_command_stack)
-              (recur n_pos r_mode (readCharacter) r_command_stack)))
+            (let [n_pos (insert-update-position r_pos r_input_key)
+                  n_buffer (insert-update-buffer r_buffer r_pos r_input_key)]
+              (update r_buffer n_pos r_mode r_input_key r_command_stack r_misc)
+              (recur r_buffer n_pos r_mode (readCharacter) r_command_stack r_misc)))
 
           (= r_mode VISUAL_MODE)
           (cond
@@ -272,15 +293,35 @@
 
             :else
             (let []
-              (update r_pos r_mode r_input_key r_command_stack)
-              (recur r_pos r_mode (readCharacter) r_command_stack)))))
+              (update r_buffer r_pos r_mode r_input_key r_command_stack r_misc)
+              (recur r_buffer r_pos r_mode (readCharacter) r_command_stack r_misc)))))
       (do
-        (update r_pos r_mode r_input_key r_command_stack)
-        (recur r_pos r_mode (readCharacter) r_command_stack)))))
+        (update r_buffer r_pos r_mode r_input_key r_command_stack r_misc)
+        (recur r_buffer r_pos r_mode (readCharacter) r_command_stack r_misc)))))
 
 (defn main []
   (do
+    ;TODO: read file from command line
+    ;use *command-line-args* to access .. command line args
+    ;
+    ;about process args:
+    ;  buffer - associative array: line-number -> string
+    ;           numbers less than 0 are reserved (such as clipboard)
+    ;
+    ;  position - stack: only changes when going into command mode
+    ;             should only contain at most 2 elements
+    ;
+    ;  mode - enum: defines the mode on the next iteration
+    ;               which occurs after a keystroke.
+    ;
+    ;  input_key - inputchar: java class. see InputChar.java
+    ;
+    ;  command_stack - stack: keeps track of what the user currently
+    ;                  has typed in normal and command mode
+    ;                  note it resets on changing modes.
+    ;  
+    ;  misc - associative array: * -> *
     (init)
-    (process [[0 0]] NORMAL_MODE nil [])))
+    (process {} [[0 0]] NORMAL_MODE nil [] {ANCHOR [0 0]})))
 
 (main)

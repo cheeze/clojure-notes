@@ -135,7 +135,7 @@
           key_code (str (_key-code-helper input_key))]
       (show-buffer buffer (misc ANCHOR))
       (printString toolbar 0 (- (getScreenHeight) 1) __text_color)
-      (printString key_code (- (getScreenWidth) 4) (- (getScreenHeight) 1) __text_color))
+      (printString key_code (- (getScreenWidth) 3) (- (getScreenHeight) 1) __text_color))
     (move (_get_x pos) (_get_y pos))))
 
 ;GENERIC
@@ -219,6 +219,7 @@
       (if s
         (let [pre (.substring s 0 (_get_x pos))
               post (.substring s (_get_x pos) (.length s))]
+          ;need to check input_key for type of character
           (assoc buffer (_get_y pos) (.concat pre (.concat (.toString input_key) post))))
         (assoc buffer (_get_y pos) (.toString input_key))))))
 

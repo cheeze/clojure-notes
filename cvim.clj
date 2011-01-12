@@ -91,8 +91,8 @@
   (second (first pos)))
 
 (defn- position-to-string [pos]
-  (let [x (get-x pos)
-        y (get-y pos)]
+  (let [x (first (last pos))
+        y (second (last pos))]
     (str (java.lang.Integer/toString y) "," (java.lang.Integer/toString x))))
 
 (defn- mode-to-string [mode]
@@ -189,22 +189,42 @@
 
 ;MODE
 ;helpers
-(declare helper-push-command-stack)
-(defn- helper-push-command-stack [state]
-  (let [command_stack (state COMMAND_STACK)
-        input_key (state INPUT_KEY)]
+(declare push-command-stack)
+(declare pop-command-stack)
+
+(defn- push-command-stack [command_stack input_key]
     (if (not (.isSpecialCode input_key))
       (cond
         (= (.getCode input_key) KEY_RETURN)
-        state
+        command_stack
 
         :else
-        (let [new_command_stack (concat command_stack (.toString input_key))]
-          (assoc state COMMAND_STACK new_command_stack)))
+        (concat command_stack (.toString input_key)))
       (cond
         (= (.getCode input_key) KEY_BACKSPACE)
-        (let [new_command_stack (drop-last command_stack)]
-          (assoc state COMMAND_STACK new_command_stack))))))
+        command_stack)))
+
+(defn pop-command-stack [command_stack]
+  (drop-last command_stack))
+
+(declare move-cursor-up)
+(declare move-cursor-down)
+(declare move-cursor-left)
+(declare move-cursor-right)
+
+(defn move-cursor-up [position n]
+  (cons [(get-x position) (- (get-y position) n)] (rest position)))
+
+(defn move-cursor-down [position n]
+  (move-cursor-up position (* n -1)))
+
+(defn move-cursor-left [position n]
+  (cons [(- (get-x position) n) (get-y position)] (rest position)))
+
+(defn move-cursor-right [position n]
+  (move-cursor-left position (* n -1)))
+
+
 
 ;generic
 (declare generic-input-key-esc)
@@ -232,24 +252,35 @@
       state)))
 
 (defn- normal-push-command-stack [state]
-  (let [input_key (state INPUT_KEY)]
+  (let [position (state POSITION)
+        input_key (state INPUT_KEY)
+        command_stack (state COMMAND_STACK)]
     (if (.isSpecialCode input_key)
       (cond
+        (= (.getCode input_key) KEY_BACKSPACE)
+        (cond
+          (= (.length (vec command_stack)) 0)
+          state
+
+          :else
+          (let [new_command_stack (pop-command-stack command_stack)]
+            (assoc state COMMAND_STACK new_command_stack)))
+
         :else
         state)
       (cond
         (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
         (normal-to-command state)
 
-        (= (.getCode input_key) NORMAL_TO_INSERT_MODE_KEY)
+        (= (.getCode input_key) (.getCode NORMAL_TO_INSERT_MODE_KEY))
         (normal-to-insert state)
 
-        (= (.getCode input_key) NORMAL_TO_VISUAL_MODE_KEY)
+        (= (.getCode input_key) (.getCode NORMAL_TO_VISUAL_MODE_KEY))
         (normal-to-visual state)
 
         :else
-        (let [new_state (helper-push-command-stack state)]
-          (normal-evaluate-command-stack new_state))))))
+        (let [new_command_stack (push-command-stack command_stack input_key)]
+          (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
 
 ;switch to command mode
 ;change cursor position when going from normal to command mode
@@ -274,7 +305,6 @@
   (let [new_command_stack []
         new_mode VISUAL_MODE]
     (assoc state MODE new_mode COMMAND_STACK new_command_stack)))
-
 
 ;command mode
 (declare command-evaluate-command-stack)
@@ -302,24 +332,24 @@
       (cond
         (= (.getCode input_key) KEY_BACKSPACE)
         (cond
-          (< (.length (vec command_stack)) 3) ;go back to NORMAL_MODE
+          (< (.length (vec command_stack)) 2) ;go back to NORMAL_MODE
           (let [new_position [(last position)]
                 new_mode NORMAL_MODE
                 new_command_stack []]
             (assoc state POSITION new_position MODE new_mode COMMAND_STACK new_command_stack))
 
           :else
-          (let [new_position (cons [(- (get-x position) 1) (get-y position)] (rest position))
-                new_command_stack (drop-last command_stack)]
+          (let [new_position (move-cursor-left position 1)
+                new_command_stack (pop-command-stack command_stack)]
             (assoc state POSITION new_position COMMAND_STACK new_command_stack))))
       (cond
         (= (.getCode input_key) KEY_RETURN)
         (command-evaluate-command-stack state)
 
         :else
-        (let [new_state (helper-push-command-stack state)
-              new_position (cons [(+ (get-x position) 1) (get-y position)] (rest position))]
-          (assoc new_state POSITION new_position))))))
+        (let [new_position (move-cursor-right position 1)
+              new_command_stack (push-command-stack command_stack input_key)]
+          (assoc state POSITION new_position COMMAND_STACK new_command_stack))))))
 
 ;insert mode
 
@@ -333,7 +363,7 @@
       (if input_key
         (cond
           ;GLOBAL special codes
-          (= (.getCode input_key) TO_NORMAL_MODE_KEY)
+          (= (.getCode input_key) (.getCode TO_NORMAL_MODE_KEY))
           (let [new_state (generic-input-key-esc recursive_state)]
             (recur (update new_state)))
 

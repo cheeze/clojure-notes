@@ -237,10 +237,12 @@
 (defn- move-cursor-right [position n]
   (move-cursor-left position (* n -1)))
 
-(declare normaize-buffer)
+(declare normalize-buffer)
 
 (defn- normalize-buffer [buffer]
-  buffer)
+  (let [line_count (reduce max (keys buffer))
+        create_buffer (defn f [a] (if (buffer a) {a (buffer a)} {a ""}))]
+    (reduce merge (map create_buffer (range line_count)))))
 
 ;generic
 (declare generic-input-key-esc)
@@ -479,7 +481,7 @@
 (defn main []
   (do
     (init)
-    (let [initial_state {BUFFER (normalize {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"})
+    (let [initial_state {BUFFER (normalize-buffer {0 "test" 1 "what do you want" 2 "" 3 "hello"})
                          POSITION [[0 0]]
                          MODE NORMAL_MODE
                          INPUT_KEY nil

@@ -38,6 +38,7 @@
 (def INPUT_KEY 3)
 (def COMMAND_STACK 4)
 (def ANCHOR 5)
+(def ERROR_DISPLAY 20)
 
 ;configuration constants
 ;special keys
@@ -179,8 +180,10 @@
         information_bar (construct-information-bar state)
         screen_height (get-screen-height)
         screen_width (get-screen-width)]
-    (print-string status_bar 0 (- screen_height 1))
-    (print-string information_bar (- screen_width 25) (- screen_height 1))))
+        (print-string information_bar (- screen_width 25) (- screen_height 1))
+    (if (state ERROR_DISPLAY)
+      (print-error (state ERROR_DISPLAY) 0 (- screen_height 1))
+      (print-string status_bar 0 (- screen_height 1)))))
 
 
 (defn- update [state]
@@ -189,7 +192,7 @@
     (show-buffer state)
     (show-bar state)
     (move-cursor state)
-    (assoc state INPUT_KEY (read-character))))
+    (assoc state INPUT_KEY (read-character) ERROR_DISPLAY nil)))
 
 ;MODE
 ;helpers
@@ -346,9 +349,7 @@
 
       :else
       (let [error_string (str "invalid command: " (command-stack-to-string command_stack))]
-        (print-error error_string 0 (- screen_height 1))
-        (read-character)
-        (generic-input-key-esc state)))))
+        (generic-input-key-esc (assoc state ERROR_DISPLAY error_string))))))
 
 (defn- command-push-command-stack [state]
   (let [position (state POSITION)

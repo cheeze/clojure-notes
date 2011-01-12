@@ -339,7 +339,7 @@
     ;                  note it resets on changing modes.
     ;  
     ;  misc - associative array: * -> *
-    ;(init)
+    (init)
     (process {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"} [[0 0]] NORMAL_MODE nil [] {ANCHOR 0})))
 
 (main)

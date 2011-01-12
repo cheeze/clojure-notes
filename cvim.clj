@@ -1,4 +1,4 @@
-(ns cvim
+(ns cvim.cvim
   (:import
      (jcurses.system.Toolkit)
      (jcurses.system.InputChar)

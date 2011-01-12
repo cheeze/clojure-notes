@@ -1,4 +1,4 @@
-(ns cvim_constants
+(ns cvim.constants
   (:import
    (jcurses.system.Toolkit)
    (jcurses.system.InputChar)

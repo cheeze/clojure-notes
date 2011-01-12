@@ -312,14 +312,14 @@
           (let [new_position (cons [(- (get-x position) 1) (get-y position)] (rest position))
                 new_command_stack (drop-last command_stack)]
             (assoc state POSITION new_position COMMAND_STACK new_command_stack))))
-       (cond
-         (= (.getCode input_key) KEY_RETURN)
-         (command-evaluate-command-stack state)
+      (cond
+        (= (.getCode input_key) KEY_RETURN)
+        (command-evaluate-command-stack state)
 
-         :else
-         (let [new_state (helper-push-command-stack state)
-               new_position (cons [(+ (get-x position) 1) (get-y position)] (rest position))]
-           (assoc new_state POSITION new_position))))))
+        :else
+        (let [new_state (helper-push-command-stack state)
+              new_position (cons [(+ (get-x position) 1) (get-y position)] (rest position))]
+          (assoc new_state POSITION new_position))))))
 
 ;insert mode
 

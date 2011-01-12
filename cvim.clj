@@ -2,46 +2,8 @@
   (:import
      (jcurses.system.Toolkit)
      (jcurses.system.InputChar)
-     (jcurses.system.CharColor)))
-
-;constants
-(def COMMAND_STACK_STR "command stack: ")
-(def CURRENT_POSITION_STR "curr pos: ")
-(def CURRENT_MODE_STR "curr mode: ")
-
-(def NORMAL "normal")
-(def COMMAND "command")
-(def INSERT "insert")
-(def VISUAL "visual")
-
-(def NORMAL_MODE 0)
-(def COMMAND_MODE 1)
-(def INSERT_MODE 2)
-(def VISUAL_MODE 3)
-
-;input key codes
-(def KEY_RETURN 10)
-(def KEY_ESC 27)
-(def KEY_COLON 58)
-(def KEY_I 105)
-(def KEY_V 118)
-(def KEY_BACKSPACE 263)
-
-;state keys
-(def BUFFER 0)
-(def POSITION 1)
-(def MODE 2)
-(def INPUT_KEY 3)
-(def COMMAND_STACK 4)
-(def ANCHOR 5)
-
-;configuration constants
-;special keys
-(def NORMAL_TO_COMMAND_MODE_KEY (new jcurses.system.InputChar KEY_COLON))
-
-(def TEXT_COLOR (new jcurses.system.CharColor (jcurses.system.CharColor/BLACK) (jcurses.system.CharColor/WHITE)))
-
-(def ERROR_COLOR (new jcurses.system.CharColor (jcurses.system.CharColor/WHITE) (jcurses.system.CharColor/RED)))
+     (jcurses.system.CharColor))
+  (:use cvim_constants))
 
 ;Toolkit calls
 (defn init []
@@ -238,11 +200,10 @@
         (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
         (normal-to-command state)
 
-        ;TODO switch to better constants
-        (= (.getCode input_key) KEY_I)
+        (= (.getCode input_key) NORMAL_TO_INSERT_MODE_KEY)
         (normal-to-insert state)
 
-        (= (.getCode input_key) KEY_V)
+        (= (.getCode input_key) NORMAL_TO_VISUAL_MODE_KEY)
         (normal-to-visual state)
 
         :else
@@ -300,7 +261,7 @@
       (cond
         (= (.getCode input_key) KEY_BACKSPACE)
         (cond
-          (< (.length (vec command_stack)) 2) ;go back to NORMAL_MODE
+          (< (.length (vec command_stack)) 3) ;go back to NORMAL_MODE
           (let [new_position [(last position)]
                 new_mode NORMAL_MODE
                 new_command_stack []]
@@ -325,36 +286,36 @@
 
 ;
 (defn- main-loop [state]
-  (loop [r_state state]
-    (let [input_key (r_state INPUT_KEY)
-          mode (r_state MODE)]
+  (loop [recursive_state state]
+    (let [input_key (recursive_state INPUT_KEY)
+          mode (recursive_state MODE)]
       (if input_key
         (cond
           ;GLOBAL special codes
-          (= (.getCode input_key) KEY_ESC)
-          (let [new_state (generic-input-key-esc r_state)]
+          (= (.getCode input_key) TO_NORMAL_MODE_KEY)
+          (let [new_state (generic-input-key-esc recursive_state)]
             (recur (update new_state)))
 
           :else
           (cond
             (= mode NORMAL_MODE)
-            (let [new_state (normal-push-command-stack r_state)]
+            (let [new_state (normal-push-command-stack recursive_state)]
               (recur (update new_state)))
 
             (= mode COMMAND_MODE)
-            (let [new_state (command-push-command-stack r_state)]
+            (let [new_state (command-push-command-stack recursive_state)]
               (recur (update new_state)))
 
             (= mode INSERT_MODE)
-            (recur (update r_state))
+            (recur (update recursive_state))
 
             (= mode VISUAL MODE)
-            (recur (update r_state))
+            (recur (update recursive_state))
 
             :else
-            (recur (update r_state))))
+            (recur (update recursive_state))))
         (do
-          (recur (update r_state)))))))
+          (recur (update recursive_state)))))))
 
 (defn main []
   (do

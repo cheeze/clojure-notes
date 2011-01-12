@@ -211,7 +211,7 @@
       (= (.getCode input_key) KEY_BACKSPACE)
       command_stack)))
 
-(defn pop-command-stack [command_stack]
+(defn- pop-command-stack [command_stack]
   (drop-last command_stack))
 
 (declare move-cursor-up)
@@ -219,25 +219,28 @@
 (declare move-cursor-left)
 (declare move-cursor-right)
 
-(defn move-cursor-up [position n]
+(defn- move-cursor-up [position n]
   (let [new_y (- (get-y position) n)]
     (if (< new_y 0)
       position
       (cons [(get-x position) (- (get-y position) n)] (rest position)))))
 
-(defn move-cursor-down [position n]
+(defn- move-cursor-down [position n]
   (move-cursor-up position (* n -1)))
 
-(defn move-cursor-left [position n]
+(defn- move-cursor-left [position n]
   (let [new_x (- (get-x position) n)]
     (if (< new_x 0)
       position
       (cons [(- (get-x position) n) (get-y position)] (rest position)))))
 
-(defn move-cursor-right [position n]
+(defn- move-cursor-right [position n]
   (move-cursor-left position (* n -1)))
 
+(declare normaize-buffer)
 
+(defn- normalize-buffer [buffer]
+  buffer)
 
 ;generic
 (declare generic-input-key-esc)
@@ -265,7 +268,8 @@
       state)))
 
 (defn- normal-push-command-stack [state]
-  (let [position (state POSITION)
+  (let [buffer (state BUFFER)
+        position (state POSITION)
         input_key (state INPUT_KEY)
         command_stack (state COMMAND_STACK)]
     (if (.isSpecialCode input_key)
@@ -380,8 +384,62 @@
           (assoc state POSITION new_position COMMAND_STACK new_command_stack))))))
 
 ;insert mode
+(declare insert-input-key)
+(declare insert-remove-input-key)
+(declare insert-push-command-stack)
+
+(defn- insert-add-input-key [state]
+  (let [buffer (state BUFFER)
+        position (state POSITION)
+        input_key (state INPUT_KEY)]
+        (let [line (buffer (get-y position))
+              new_position (move-cursor-right position 1)]
+          (if line
+            (let [pre (.substring line 0 (get-x position))
+                  post (.substring line (get-x position) (.length line))]
+              (let [new_buffer (assoc buffer (get-y position) (str pre (.toString input_key) post))]
+                (assoc state BUFFER new_buffer POSITION new_position)))
+            (let [new_buffer (assoc buffer (get-y position) (.toString input_key))]
+              (assoc state BUFFER new_buffer POSITION new_position))))))
+
+(defn- insert-remove-input-key [state]
+   (let [buffer (state BUFFER)
+        position (state POSITION)
+        input_key (state INPUT_KEY)]
+     (if (> (get-x position) 0)
+        (let [line (buffer (get-y position))
+              new_position (move-cursor-left position 1)]
+          (let [pre (.substring line 0 (- (get-x position) 1))
+                post (.substring line (get-x position) (.length line))]
+            (if (= (.length (str pre post)) 0)
+              (let [new_buffer (assoc buffer (get-y position) nil)]
+                (assoc state BUFFER new_buffer POSITION new_position))
+              (let [new_buffer (assoc buffer (get-y position) (str pre post))]
+                (assoc state BUFFER new_buffer POSITION new_position)))))
+       ;need to go up one level
+       state)))
+
+(defn- insert-push-command-stack [state]
+  (let [buffer (state BUFFER)
+        position (state POSITION)
+        input_key (state INPUT_KEY)]
+    (if (.isSpecialCode input_key)
+      (cond
+        (= (.getCode input_key) KEY_BACKSPACE)
+        (insert-remove-input-key state)
+
+        :else
+        state)
+      (cond
+        (= (.getCode input_key) KEY_RETURN)
+        state
+
+        :else
+        (insert-add-input-key state)))))
 
 ;visual mode
+(defn- visual-push-command-stack [state]
+  state)
 
 ;
 (defn- main-loop [state]
@@ -406,10 +464,12 @@
               (recur (update new_state)))
 
             (= mode INSERT_MODE)
-            (recur (update recursive_state))
+            (let [new_state (insert-push-command-stack recursive_state)]
+              (recur (update new_state)))
 
             (= mode VISUAL MODE)
-            (recur (update recursive_state))
+            (let [new_state (visual-push-command-stack recursive_state)]
+              (recur (update new_state)))
 
             :else
             (recur (update recursive_state))))
@@ -419,7 +479,7 @@
 (defn main []
   (do
     (init)
-    (let [initial_state {BUFFER {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"}
+    (let [initial_state {BUFFER (normalize {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"})
                          POSITION [[0 0]]
                          MODE NORMAL_MODE
                          INPUT_KEY nil

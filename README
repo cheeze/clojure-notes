@@ -1,1 +1,1 @@
-requires jcurses.jar (compiled with the move function)
+requires jcurses.jar and its associated libjcurses.so (compiled with the move function)

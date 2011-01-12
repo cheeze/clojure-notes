@@ -23,7 +23,11 @@
 (def KEY_RETURN 10)
 (def KEY_ESC 27)
 (def KEY_COLON 58)
+(def KEY_H 104)
 (def KEY_I 105)
+(def KEY_J 106)
+(def KEY_K 107)
+(def KEY_L 108)
 (def KEY_V 118)
 (def KEY_BACKSPACE 263)
 
@@ -180,7 +184,7 @@
 
 
 (defn- update [state]
-  (do
+  (do ;TODO: might need to limit how fast this can redraw..
     (clear-screen)
     (show-buffer state)
     (show-bar state)
@@ -193,16 +197,16 @@
 (declare pop-command-stack)
 
 (defn- push-command-stack [command_stack input_key]
-    (if (not (.isSpecialCode input_key))
-      (cond
-        (= (.getCode input_key) KEY_RETURN)
-        command_stack
+  (if (not (.isSpecialCode input_key))
+    (cond
+      (= (.getCode input_key) KEY_RETURN)
+      command_stack
 
-        :else
-        (concat command_stack (.toString input_key)))
-      (cond
-        (= (.getCode input_key) KEY_BACKSPACE)
-        command_stack)))
+      :else
+      (concat command_stack (.toString input_key)))
+    (cond
+      (= (.getCode input_key) KEY_BACKSPACE)
+      command_stack)))
 
 (defn pop-command-stack [command_stack]
   (drop-last command_stack))
@@ -213,13 +217,19 @@
 (declare move-cursor-right)
 
 (defn move-cursor-up [position n]
-  (cons [(get-x position) (- (get-y position) n)] (rest position)))
+  (let [new_y (- (get-y position) n)]
+    (if (< new_y 0)
+      position
+      (cons [(get-x position) (- (get-y position) n)] (rest position)))))
 
 (defn move-cursor-down [position n]
   (move-cursor-up position (* n -1)))
 
 (defn move-cursor-left [position n]
-  (cons [(- (get-x position) n) (get-y position)] (rest position)))
+  (let [new_x (- (get-x position) n)]
+    (if (< new_x 0)
+      position
+      (cons [(- (get-x position) n) (get-y position)] (rest position)))))
 
 (defn move-cursor-right [position n]
   (move-cursor-left position (* n -1)))
@@ -268,19 +278,36 @@
 
         :else
         state)
-      (cond
-        (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
-        (normal-to-command state)
+        (cond
+          ;change modes
+          (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
+          (normal-to-command state)
 
-        (= (.getCode input_key) (.getCode NORMAL_TO_INSERT_MODE_KEY))
-        (normal-to-insert state)
+          (= (.getCode input_key) (.getCode NORMAL_TO_INSERT_MODE_KEY))
+          (normal-to-insert state)
 
-        (= (.getCode input_key) (.getCode NORMAL_TO_VISUAL_MODE_KEY))
-        (normal-to-visual state)
+          (= (.getCode input_key) (.getCode NORMAL_TO_VISUAL_MODE_KEY))
+          (normal-to-visual state)
 
-        :else
-        (let [new_command_stack (push-command-stack command_stack input_key)]
-          (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
+          (= (.getCode input_key) KEY_H)
+          (let [new_position (move-cursor-left position 1)]
+            (assoc state POSITION new_position))
+
+          (= (.getCode input_key) KEY_J)
+          (let [new_position (move-cursor-down position 1)]
+            (assoc state POSITION new_position))
+
+          (= (.getCode input_key) KEY_K)
+          (let [new_position (move-cursor-up position 1)]
+            (assoc state POSITION new_position))
+
+          (= (.getCode input_key) KEY_L)
+          (let [new_position (move-cursor-right position 1)]
+            (assoc state POSITION new_position))
+
+          :else
+          (let [new_command_stack (push-command-stack command_stack input_key)]
+            (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
 
 ;switch to command mode
 ;change cursor position when going from normal to command mode
@@ -391,14 +418,12 @@
 (defn main []
   (do
     (init)
-    (let [initial_state {
-                         BUFFER {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"}
+    (let [initial_state {BUFFER {0 "test" 1 "what do you want" 2 "" 3 "hello" 45 "45" 46 "46" 47 "47" 48 "48" 49 "49" 50 "50"}
                          POSITION [[0 0]]
                          MODE NORMAL_MODE
                          INPUT_KEY nil
                          COMMAND_STACK []
-                         ANCHOR 0
-                         }]
+                         ANCHOR 0}]
       (main-loop initial_state))))
 
 (main)

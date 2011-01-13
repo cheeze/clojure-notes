@@ -1,1 +1,16 @@
-requires jcurses.jar and its associated libjcurses.so (compiled with the move function)
+(clojure vim)
+
+INFO:
+made for fun. vim clone in clojure.
+
+SETUP:
+download and install:
+clojar.jar
+clojar-contrib.jar
+
+download and place the following files into your clojure classpath:
+jcurses.jar
+libjcurses.so
+
+RUN:
+clojure cvim.clj

@@ -40,6 +40,7 @@
 (def INPUT_KEY 3)
 (def COMMAND_STACK 4)
 (def ANCHOR 5)
+(def FILENAME 6)
 (def SPECIAL_DISPLAY 20)
 
 ;configuration constants
@@ -78,12 +79,7 @@
 (defn move [x y]
   (jcurses.system.Toolkit/move x y))
 
-;commands
-(declare write-out)
 
-(defn- write-out [filename buffer]
-  (with-open [writer (new BufferedWriter (new FileWriter filename))]
-    (doseq [line (vals buffer)] (.write writer line))))
 
 ;display helpers
 (declare move-cursor)
@@ -93,6 +89,7 @@
 (declare mode-to-string)
 (declare input-key-to-string)
 (declare command-stack-to-string)
+(declare anchor-to-string)
 
 (defn- move-cursor [state]
   (let [position (state POSITION)
@@ -137,6 +134,9 @@
       (recur (str c (first command_stack)) (rest command_stack))))
   (_compress "" command_stack))
 
+(defn- anchor-to-string [anchor]
+  (java.lang.Integer/toString anchor))
+
 ;CONSTRUCTION
 (declare construct-status-bar)
 (declare construct-information-bar)
@@ -163,10 +163,12 @@
 ;construct information bar
 (defn- construct-information-bar [state]
   (let [position (state POSITION)
-        input_key (state INPUT_KEY)]
+        input_key (state INPUT_KEY)
+        anchor (state ANCHOR)]
     (let [position_str (position-to-string position)
-          input_key_str (input-key-to-string input_key)]
-      (str CURRENT_POSITION_STR ": " position_str " - " input_key_str))))
+          input_key_str (input-key-to-string input_key)
+          anchor_str (anchor-to-string anchor)]
+      (str CURRENT_POSITION_STR ": " position_str " - " input_key_str " - " anchor_str))))
 
 ;DISPLAY
 (declare show-text)
@@ -193,13 +195,13 @@
         information_bar (construct-information-bar state)
         screen_height (get-screen-height)
         screen_width (get-screen-width)]
-    (print-string information_bar (- screen_width 25) (- screen_height 1))
+    (print-string information_bar (- screen_width 30) (- screen_height 1))
     (if (state SPECIAL_DISPLAY)
       (print-special (state SPECIAL_DISPLAY) 0 (- screen_height 1))
       (print-string status_bar 0 (- screen_height 1)))))
 
 (defn- update-anchor [state]
-  (let [position_y (get-y (state POSITION))
+  (let [position_y (second (last (state POSITION)))
         height (- (get-screen-height) 2)
         anchor (state ANCHOR)]
     (cond
@@ -222,6 +224,31 @@
     (show-bar state)
     (move-cursor state)
     (continue state)))
+
+;COMMANDS
+(declare generic-input-key-esc)
+(declare open-command)
+(declare write-out-buffer)
+(declare write-command)
+(declare quit-command)
+
+(defn- open-command [state command_str]
+  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
+
+(defn- write-out-buffer [filename buffer]
+  (with-open [writer (new BufferedWriter (new FileWriter filename))]
+    (doseq [line (vals buffer)] (.write writer line))))
+
+(defn- write-command [state command_str]
+  (let [filename (get (.split command_str " ") 1)]
+    (if (and (not (= filename nil)) (not (= (.length filename) 0)))
+      (do
+        (write-out-buffer filename (state BUFFER))
+        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " filename))))
+      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
+
+(defn- quit-command [state]
+  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "file not saved")))
 
 ;MODE
 ;helpers
@@ -273,8 +300,31 @@
         create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
     (reduce merge (map create_buffer (range (+ line_count 1))))))
 
+;commands
+(declare open-command)
+(declare write-out-buffer)
+(declare write-command)
+(declare quit-command)
+
+(defn- open-command [state command_str]
+  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
+
+(defn- write-out-buffer [filename buffer]
+  (with-open [writer (new BufferedWriter (new FileWriter filename))]
+    (doseq [line (vals buffer)] (.write writer line))))
+
+(defn- write-command [state command_str]
+  (let [filename (get (.split command_str " ") 1)]
+    (if (and (not (= filename nil)) (not (= (.length filename) 0)))
+      (do
+        (write-out-buffer filename (state BUFFER))
+        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " filename))))
+      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
+
+(defn- quit-command [state]
+  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "file not saved")))
+
 ;generic
-(declare generic-input-key-esc)
 (defn- generic-input-key-esc [state]
   (let [position (state POSITION)]
     (let [new_position [(last position)]
@@ -420,12 +470,14 @@
         screen_height (get-screen-height)]
     (let [command_str (command-stack-to-string command_stack)]
       (cond
-        ;what is command_stack
-        (.equals command_str ":w")
-        state
-        ;(do
-        ;  (write-out "test.out" (state BUFFER))
-        ;  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "writing")))
+        (.startsWith command_str ":o")
+        (open-command state command_str)
+
+        (.startsWith command_str ":w")
+        (write-command state command_str)
+
+        (.startsWith command_str ":q")
+        (quit-command state)
 
         :else
         (generic-input-key-esc (assoc state SPECIAL_DISPLAY (str "invalid command: " command_str)))))))

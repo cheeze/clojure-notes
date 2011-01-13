@@ -598,7 +598,7 @@
 (defn main []
   (do
     (init)
-    (let [initial_state {BUFFER (normalize-buffer {0 "test" 1 "what do you want" 2 "" 3 "hello" 48 "48" 49 "49" 50 "50" 51 "51" 52 "52" 53 "53" 54 "54" 55 "55"})
+    (let [initial_state {BUFFER (normalize-buffer {0 ""})
                          POSITION [[0 0]]
                          MODE NORMAL_MODE
                          INPUT_KEY nil

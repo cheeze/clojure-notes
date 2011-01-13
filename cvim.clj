@@ -241,7 +241,7 @@
 (defn- normalize-buffer [buffer]
   (let [line_count (reduce max (keys buffer))
         create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
-    (reduce merge (map create_buffer (range line_count)))))
+    (reduce merge (map create_buffer (range (+ line_count 1))))))
 
 ;generic
 (declare generic-input-key-esc)
@@ -429,15 +429,25 @@
 
 ;in both functions, y_position defines where the current cursor is
 (defn- insert-move-buffer-up [buffer y_position]
-  buffer)
+  (let [line_count (reduce max (keys buffer))]
+    (let [decrement (defn f [line_number] 
+                      (cond
+                        (>= line_number y_position) 
+                        {(- line_number 1) (buffer line_number)}
+
+                        (= line_number (- y_position 1))
+                        {}
+
+                        (< line_number (- y_position 1))
+                        {line_number (buffer line_number)}))]
+      (merge (reduce merge (map decrement (keys buffer)))))))
 
 (defn- insert-move-buffer-down [buffer y_position]
-  (let [line_count (reduce max (keys buffer))]
     (let [increment (defn f [line_number] 
                       (if (>= line_number y_position) 
                         {(+ line_number 1) (buffer line_number)}
                         {line_number (buffer line_number)}))]
-      (merge (reduce merge (map increment (keys buffer))) {y_position ""}))))
+      (merge (reduce merge (map increment (keys buffer))))))
 
 (declare insert-input-key)
 (declare insert-remove-input-key)
@@ -459,11 +469,20 @@
 
 (defn- insert-remove-input-key [state]
   (let [buffer (state BUFFER)
-        position (state POSITION)
-        input_key (state INPUT_KEY)]
+        position (state POSITION)]
     (if (= (get-x position) 0)
       ;backspace at beginning of line
-      state
+      (if (> (get-y position) 0)
+        ;not at top line
+        (if (= (.length (buffer (- (get-y position) 1))) 0)
+          ;line above has no text
+          (let [new_buffer (insert-move-buffer-up buffer (get-y position))
+                new_position (move-cursor-up position 1)]
+            (assoc state BUFFER new_buffer POSITION new_position))
+          ;line above has text
+          state)
+        ;at top line, should not move
+        state)
       ;backspace at anywhere in the line
       (let [line (buffer (get-y position))
             new_position (move-cursor-left position 1)]
@@ -481,7 +500,7 @@
         input_key (state INPUT_KEY)]
     (if (= (get-x position) 0)
       ;return at beginning of line
-      (let [new_buffer (insert-move-buffer-down buffer (get-y position))
+      (let [new_buffer (assoc (insert-move-buffer-down buffer (get-y position)) (get-y position) "")
             new_position (move-cursor-down position 1)]
         (assoc state BUFFER new_buffer POSITION new_position))
       ;return at anywhere else

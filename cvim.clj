@@ -185,7 +185,6 @@
       (print-error (state ERROR_DISPLAY) 0 (- screen_height 1))
       (print-string status_bar 0 (- screen_height 1)))))
 
-
 (defn- update [state]
   (do
     (clear-screen)
@@ -428,11 +427,17 @@
 (declare insert-move-buffer-up)
 (declare insert-move-buffer-down)
 
+;in both functions, y_position defines where the current cursor is
 (defn- insert-move-buffer-up [buffer y_position]
   buffer)
 
 (defn- insert-move-buffer-down [buffer y_position]
-  buffer)
+  (let [line_count (reduce max (keys buffer))]
+    (let [increment (defn f [line_number] 
+                      (if (>= line_number y_position) 
+                        {(+ line_number 1) (buffer line_number)}
+                        {line_number (buffer line_number)}))]
+      (merge (reduce merge (map increment (keys buffer))) {y_position ""}))))
 
 (declare insert-input-key)
 (declare insert-remove-input-key)
@@ -456,7 +461,10 @@
   (let [buffer (state BUFFER)
         position (state POSITION)
         input_key (state INPUT_KEY)]
-    (if (> (get-x position) 0)
+    (if (= (get-x position) 0)
+      ;backspace at beginning of line
+      state
+      ;backspace at anywhere in the line
       (let [line (buffer (get-y position))
             new_position (move-cursor-left position 1)]
         (let [pre (.substring line 0 (- (get-x position) 1))
@@ -465,9 +473,20 @@
             (let [new_buffer (assoc buffer (get-y position) "")]
               (assoc state BUFFER new_buffer POSITION new_position))
             (let [new_buffer (assoc buffer (get-y position) (str pre post))]
-              (assoc state BUFFER new_buffer POSITION new_position)))))
-      ;need to go up one level
+              (assoc state BUFFER new_buffer POSITION new_position))))))))
+
+(defn- insert-return-input-key [state]
+  (let [buffer (state BUFFER)
+        position (state POSITION)
+        input_key (state INPUT_KEY)]
+    (if (= (get-x position) 0)
+      ;return at beginning of line
+      (let [new_buffer (insert-move-buffer-down buffer (get-y position))
+            new_position (move-cursor-down position 1)]
+        (assoc state BUFFER new_buffer POSITION new_position))
+      ;return at anywhere else
       state)))
+
 
 (defn- insert-push-command-stack [state]
   (let [buffer (state BUFFER)
@@ -482,7 +501,7 @@
         state)
       (cond
         (= (.getCode input_key) KEY_RETURN)
-        state
+        (insert-return-input-key state)
 
         :else
         (insert-add-input-key state)))))

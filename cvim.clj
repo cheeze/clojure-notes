@@ -87,8 +87,11 @@
 
 (defn- move-cursor [state]
   (let [position (state POSITION)
-        anchor (state ANCHOR)]
-    (move (get-x position) (- (get-y position) anchor))))
+        anchor (state ANCHOR)
+        mode (state MODE)]
+    (if (= mode COMMAND_MODE)
+      (move (get-x position) (get-y position))
+      (move (get-x position) (- (get-y position) anchor)))))
 
 (defn- get-x [pos]
   (first (first pos)))
@@ -199,8 +202,6 @@
 
       :else
       state)))
-
-      
 
 (defn- continue [state]
   (assoc state INPUT_KEY (read-character) ERROR_DISPLAY nil))

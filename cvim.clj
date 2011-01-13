@@ -79,9 +79,7 @@
 (defn move [x y]
   (jcurses.system.Toolkit/move x y))
 
-
-
-;display helpers
+;function declarations
 (declare move-cursor)
 (declare get-x)
 (declare get-y)
@@ -91,6 +89,53 @@
 (declare command-stack-to-string)
 (declare anchor-to-string)
 
+(declare construct-status-bar)
+(declare construct-information-bar)
+
+(declare show-text)
+(declare show-buffer)
+(declare show-bar)
+(declare update)
+
+(declare push-command-stack)
+(declare pop-command-stack)
+
+(declare move-cursor-up)
+(declare move-cursor-down)
+(declare move-cursor-left)
+(declare move-cursor-right)
+
+(declare normalize-buffer)
+
+(declare open-command)
+(declare write-out-buffer)
+(declare write-command)
+(declare quit-command)
+
+(declare generic-input-key-esc)
+
+(declare normal-evaluate-command-stack)
+(declare normal-push-command-stack)
+(declare normal-to-command)
+(declare normal-to-insert)
+(declare normal-to-visual)
+
+(declare normal-move-cursor-up)
+(declare normal-move-cursor-down)
+(declare normal-move-cursor-left)
+(declare normal-move-cursor-right)
+
+(declare command-evaluate-command-stack)
+(declare command-push-command-stack)
+
+(declare insert-move-buffer-up)
+(declare insert-move-buffer-down)
+
+(declare insert-input-key)
+(declare insert-remove-input-key)
+(declare insert-push-command-stack)
+
+;display helpers
 (defn- move-cursor [state]
   (let [position (state POSITION)
         anchor (state ANCHOR)
@@ -138,9 +183,6 @@
   (java.lang.Integer/toString anchor))
 
 ;CONSTRUCTION
-(declare construct-status-bar)
-(declare construct-information-bar)
-
 ;construct main status bar
 (defn- construct-status-bar [state]
   (let [mode (state MODE)
@@ -171,11 +213,6 @@
       (str CURRENT_POSITION_STR ": " position_str " - " input_key_str " - " anchor_str))))
 
 ;DISPLAY
-(declare show-text)
-(declare show-buffer)
-(declare show-bar)
-(declare update)
-
 ;display buffer helper
 (defn- show-text [text row]
   (if text
@@ -226,12 +263,6 @@
     (continue state)))
 
 ;COMMANDS
-(declare generic-input-key-esc)
-(declare open-command)
-(declare write-out-buffer)
-(declare write-command)
-(declare quit-command)
-
 (defn- open-command [state command_str]
   (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
 
@@ -244,7 +275,7 @@
     (if (and (not (= filename nil)) (not (= (.length filename) 0)))
       (do
         (write-out-buffer filename (state BUFFER))
-        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " filename))))
+        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " "\"" filename "\""))))
       (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
 
 (defn- quit-command [state]
@@ -252,9 +283,6 @@
 
 ;MODE
 ;helpers
-(declare push-command-stack)
-(declare pop-command-stack)
-
 (defn- push-command-stack [command_stack input_key]
   (if (not (.isSpecialCode input_key))
     (cond
@@ -269,11 +297,6 @@
 
 (defn- pop-command-stack [command_stack]
   (drop-last command_stack))
-
-(declare move-cursor-up)
-(declare move-cursor-down)
-(declare move-cursor-left)
-(declare move-cursor-right)
 
 (defn- move-cursor-up [position n]
   (let [new_y (- (get-y position) n)]
@@ -293,19 +316,12 @@
 (defn- move-cursor-right [position n]
   (move-cursor-left position (* n -1)))
 
-(declare normalize-buffer)
-
 (defn- normalize-buffer [buffer]
   (let [line_count (reduce max (keys buffer))
         create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
     (reduce merge (map create_buffer (range (+ line_count 1))))))
 
 ;commands
-(declare open-command)
-(declare write-out-buffer)
-(declare write-command)
-(declare quit-command)
-
 (defn- open-command [state command_str]
   (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
 
@@ -333,12 +349,6 @@
       (assoc state MODE new_mode POSITION new_position COMMAND_STACK new_command_stack))))
 
 ;normal mode
-(declare normal-evaluate-command-stack)
-(declare normal-push-command-stack)
-(declare normal-to-command)
-(declare normal-to-insert)
-(declare normal-to-visual)
-
 ;evaluate the command stack in normal mode
 (defn- normal-evaluate-command-stack [state]
   (let [command_stack (state COMMAND_STACK)]
@@ -347,11 +357,6 @@
 
       :else
       state)))
-
-(declare normal-move-cursor-up)
-(declare normal-move-cursor-down)
-(declare normal-move-cursor-left)
-(declare normal-move-cursor-right)
 
 (defn- normal-move-vertical-helper [state new_x new_y]
   (let [buffer (state BUFFER)]
@@ -461,9 +466,6 @@
     (assoc state MODE new_mode COMMAND_STACK new_command_stack)))
 
 ;command mode
-(declare command-evaluate-command-stack)
-(declare command-push-command-stack)
-
 ;evaluate the command stack in command mode
 (defn- command-evaluate-command-stack [state]
   (let [command_stack (state COMMAND_STACK)
@@ -511,9 +513,6 @@
           (assoc state POSITION new_position COMMAND_STACK new_command_stack))))))
 
 ;insert mode
-(declare insert-move-buffer-up)
-(declare insert-move-buffer-down)
-
 ;in both functions, y_position defines where the current cursor is
 (defn- insert-move-buffer-up [buffer y_position]
   (let [line_count (reduce max (keys buffer))]
@@ -535,10 +534,6 @@
                       {(+ line_number 1) (buffer line_number)}
                       {line_number (buffer line_number)}))]
     (reduce merge (map increment (keys buffer)))))
-
-(declare insert-input-key)
-(declare insert-remove-input-key)
-(declare insert-push-command-stack)
 
 (defn- insert-add-input-key [state]
   (let [buffer (state BUFFER)
@@ -603,7 +598,6 @@
             (let [new_buffer (assoc (assoc new_buffer (get-y position) pre) (+ (get-y position) 1) post)
                   new_position (move-cursor-left (move-cursor-down position 1) (.length pre))]
               (assoc state BUFFER new_buffer POSITION new_position))))))))
-
 
 (defn- insert-push-command-stack [state]
   (let [buffer (state BUFFER)

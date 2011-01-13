@@ -1,8 +1,10 @@
 (ns cvim
   (:import
-     (jcurses.system.Toolkit)
-     (jcurses.system.InputChar)
-     (jcurses.system.CharColor)))
+     (jcurses.system Toolkit)
+     (jcurses.system InputChar)
+     (jcurses.system CharColor)
+     (java.io BufferedWriter)
+     (java.io FileWriter)))
 
 ;constants
 (def COMMAND_STACK_STR "command stack: ")
@@ -38,7 +40,7 @@
 (def INPUT_KEY 3)
 (def COMMAND_STACK 4)
 (def ANCHOR 5)
-(def ERROR_DISPLAY 20)
+(def SPECIAL_DISPLAY 20)
 
 ;configuration constants
 ;special keys
@@ -49,7 +51,7 @@
 
 (def TEXT_COLOR (new jcurses.system.CharColor (jcurses.system.CharColor/BLACK) (jcurses.system.CharColor/WHITE)))
 
-(def ERROR_COLOR (new jcurses.system.CharColor (jcurses.system.CharColor/WHITE) (jcurses.system.CharColor/RED)))
+(def SPECIAL_COLOR (new jcurses.system.CharColor (jcurses.system.CharColor/WHITE) (jcurses.system.CharColor/RED)))
 
 ;Toolkit calls
 (defn init []
@@ -67,14 +69,21 @@
 (defn print-string [string x y]
   (jcurses.system.Toolkit/printString string x y TEXT_COLOR))
 
-(defn print-error [string x y]
-  (jcurses.system.Toolkit/printString string x y ERROR_COLOR))
+(defn print-special [string x y]
+  (jcurses.system.Toolkit/printString string x y SPECIAL_COLOR))
 
 (defn read-character []
   (jcurses.system.Toolkit/readCharacter))
 
 (defn move [x y]
   (jcurses.system.Toolkit/move x y))
+
+;commands
+(declare write-out)
+
+(defn- write-out [filename buffer]
+  (with-open [writer (new BufferedWriter (new FileWriter filename))]
+    (doseq [line (vals buffer)] (.write writer line))))
 
 ;display helpers
 (declare move-cursor)
@@ -185,8 +194,8 @@
         screen_height (get-screen-height)
         screen_width (get-screen-width)]
     (print-string information_bar (- screen_width 25) (- screen_height 1))
-    (if (state ERROR_DISPLAY)
-      (print-error (state ERROR_DISPLAY) 0 (- screen_height 1))
+    (if (state SPECIAL_DISPLAY)
+      (print-special (state SPECIAL_DISPLAY) 0 (- screen_height 1))
       (print-string status_bar 0 (- screen_height 1)))))
 
 (defn- update-anchor [state]
@@ -204,7 +213,7 @@
       state)))
 
 (defn- continue [state]
-  (assoc state INPUT_KEY (read-character) ERROR_DISPLAY nil))
+  (assoc state INPUT_KEY (read-character) SPECIAL_DISPLAY nil))
 
 (defn- update [state]
   (let [state (update-anchor state)]
@@ -409,12 +418,17 @@
 (defn- command-evaluate-command-stack [state]
   (let [command_stack (state COMMAND_STACK)
         screen_height (get-screen-height)]
-    (cond
-      ;what is command_stack
+    (let [command_str (command-stack-to-string command_stack)]
+      (cond
+        ;what is command_stack
+        (.equals command_str ":w")
+        state
+        ;(do
+        ;  (write-out "test.out" (state BUFFER))
+        ;  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "writing")))
 
-      :else
-      (let [error_string (str "invalid command: " (command-stack-to-string command_stack))]
-        (generic-input-key-esc (assoc state ERROR_DISPLAY error_string))))))
+        :else
+        (generic-input-key-esc (assoc state SPECIAL_DISPLAY (str "invalid command: " command_str)))))))
 
 (defn- command-push-command-stack [state]
   (let [position (state POSITION)

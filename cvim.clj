@@ -187,7 +187,7 @@
 
 
 (defn- update [state]
-  (do ;TODO: might need to limit how fast this can redraw..
+  (do
     (clear-screen)
     (show-buffer state)
     (show-bar state)
@@ -425,6 +425,15 @@
           (assoc state POSITION new_position COMMAND_STACK new_command_stack))))))
 
 ;insert mode
+(declare insert-move-buffer-up)
+(declare insert-move-buffer-down)
+
+(defn- insert-move-buffer-up [buffer y_position]
+  buffer)
+
+(defn- insert-move-buffer-down [buffer y_position]
+  buffer)
+
 (declare insert-input-key)
 (declare insert-remove-input-key)
 (declare insert-push-command-stack)
@@ -453,7 +462,7 @@
         (let [pre (.substring line 0 (- (get-x position) 1))
               post (.substring line (get-x position) (.length line))]
           (if (= (.length (str pre post)) 0)
-            (let [new_buffer (assoc buffer (get-y position) nil)]
+            (let [new_buffer (assoc buffer (get-y position) "")]
               (assoc state BUFFER new_buffer POSITION new_position))
             (let [new_buffer (assoc buffer (get-y position) (str pre post))]
               (assoc state BUFFER new_buffer POSITION new_position)))))

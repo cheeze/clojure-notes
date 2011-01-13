@@ -327,7 +327,8 @@
 
 (defn- write-out-buffer [filename buffer]
   (with-open [writer (new BufferedWriter (new FileWriter filename))]
-    (doseq [line (vals buffer)] (.write writer line))))
+    (dotimes [i (+ (reduce max (keys buffer)) 1)]
+      (.write writer (str (buffer i) "\n")))))
 
 (defn- write-command [state command_str]
   (let [filename (get (.split command_str " ") 1)]

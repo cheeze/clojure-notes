@@ -180,7 +180,7 @@
         information_bar (construct-information-bar state)
         screen_height (get-screen-height)
         screen_width (get-screen-width)]
-        (print-string information_bar (- screen_width 25) (- screen_height 1))
+    (print-string information_bar (- screen_width 25) (- screen_height 1))
     (if (state ERROR_DISPLAY)
       (print-error (state ERROR_DISPLAY) 0 (- screen_height 1))
       (print-string status_bar 0 (- screen_height 1)))))
@@ -241,7 +241,7 @@
 
 (defn- normalize-buffer [buffer]
   (let [line_count (reduce max (keys buffer))
-        create_buffer (defn f [a] (if (buffer a) {a (buffer a)} {a ""}))]
+        create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
     (reduce merge (map create_buffer (range line_count)))))
 
 ;generic
@@ -269,6 +269,49 @@
       :else
       state)))
 
+(declare normal-move-cursor-up)
+(declare normal-move-cursor-down)
+(declare normal-move-cursor-left)
+(declare normal-move-cursor-right)
+
+(defn- normal-move-vertical-helper [state new_x new_y]
+  (let [buffer (state BUFFER)]
+    (let [line (buffer new_y)]
+      (if (> new_x (.length line))
+        (let [new_position [[(.length line) new_y]]]
+          (assoc state POSITION new_position))
+        (let [new_position [[new_x new_y]]]
+          (assoc state POSITION new_position))))))
+
+(defn- normal-move-cursor-up [state]
+  (let [position (state POSITION)]
+    (let [new_y (get-y (move-cursor-up position 1))
+          new_x (get-x position)]
+      (normal-move-vertical-helper state new_x new_y))))
+
+(defn- normal-move-cursor-down [state]
+  (let [buffer (state BUFFER)
+        position (state POSITION)]
+    (let [new_y (get-y (move-cursor-down position 1))
+          new_x (get-x position)]
+      (if (buffer new_y)
+        (normal-move-vertical-helper state new_x new_y)
+        state))))
+
+(defn- normal-move-cursor-left [state]
+  (let [position (state POSITION)]
+    (let [new_position (move-cursor-left position 1)]
+      (assoc state POSITION new_position))))
+
+(defn- normal-move-cursor-right [state]
+  (let [buffer (state BUFFER)
+        position (state POSITION)]
+    (let [new_position (move-cursor-right position 1)
+          line (buffer (get-y position))]
+      (if (> (get-x new_position) (.length line))
+        state
+        (assoc state POSITION new_position)))))
+
 (defn- normal-push-command-stack [state]
   (let [buffer (state BUFFER)
         position (state POSITION)
@@ -287,36 +330,32 @@
 
         :else
         state)
-        (cond
-          ;change modes
-          (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
-          (normal-to-command state)
+      (cond
+        ;change modes
+        (= (.getCode input_key) (.getCode NORMAL_TO_COMMAND_MODE_KEY))
+        (normal-to-command state)
 
-          (= (.getCode input_key) (.getCode NORMAL_TO_INSERT_MODE_KEY))
-          (normal-to-insert state)
+        (= (.getCode input_key) (.getCode NORMAL_TO_INSERT_MODE_KEY))
+        (normal-to-insert state)
 
-          (= (.getCode input_key) (.getCode NORMAL_TO_VISUAL_MODE_KEY))
-          (normal-to-visual state)
+        (= (.getCode input_key) (.getCode NORMAL_TO_VISUAL_MODE_KEY))
+        (normal-to-visual state)
 
-          (= (.getCode input_key) KEY_H)
-          (let [new_position (move-cursor-left position 1)]
-            (assoc state POSITION new_position))
+        (= (.getCode input_key) KEY_H)
+        (normal-move-cursor-left state)
 
-          (= (.getCode input_key) KEY_J)
-          (let [new_position (move-cursor-down position 1)]
-            (assoc state POSITION new_position))
+        (= (.getCode input_key) KEY_J)
+        (normal-move-cursor-down state)
 
-          (= (.getCode input_key) KEY_K)
-          (let [new_position (move-cursor-up position 1)]
-            (assoc state POSITION new_position))
+        (= (.getCode input_key) KEY_K)
+        (normal-move-cursor-up state)
 
-          (= (.getCode input_key) KEY_L)
-          (let [new_position (move-cursor-right position 1)]
-            (assoc state POSITION new_position))
+        (= (.getCode input_key) KEY_L)
+        (normal-move-cursor-right state)
 
-          :else
-          (let [new_command_stack (push-command-stack command_stack input_key)]
-            (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
+        :else
+        (let [new_command_stack (push-command-stack command_stack input_key)]
+          (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
 
 ;switch to command mode
 ;change cursor position when going from normal to command mode
@@ -394,32 +433,32 @@
   (let [buffer (state BUFFER)
         position (state POSITION)
         input_key (state INPUT_KEY)]
-        (let [line (buffer (get-y position))
-              new_position (move-cursor-right position 1)]
-          (if line
-            (let [pre (.substring line 0 (get-x position))
-                  post (.substring line (get-x position) (.length line))]
-              (let [new_buffer (assoc buffer (get-y position) (str pre (.toString input_key) post))]
-                (assoc state BUFFER new_buffer POSITION new_position)))
-            (let [new_buffer (assoc buffer (get-y position) (.toString input_key))]
-              (assoc state BUFFER new_buffer POSITION new_position))))))
+    (let [line (buffer (get-y position))
+          new_position (move-cursor-right position 1)]
+      (if line
+        (let [pre (.substring line 0 (get-x position))
+              post (.substring line (get-x position) (.length line))]
+          (let [new_buffer (assoc buffer (get-y position) (str pre (.toString input_key) post))]
+            (assoc state BUFFER new_buffer POSITION new_position)))
+        (let [new_buffer (assoc buffer (get-y position) (.toString input_key))]
+          (assoc state BUFFER new_buffer POSITION new_position))))))
 
 (defn- insert-remove-input-key [state]
-   (let [buffer (state BUFFER)
+  (let [buffer (state BUFFER)
         position (state POSITION)
         input_key (state INPUT_KEY)]
-     (if (> (get-x position) 0)
-        (let [line (buffer (get-y position))
-              new_position (move-cursor-left position 1)]
-          (let [pre (.substring line 0 (- (get-x position) 1))
-                post (.substring line (get-x position) (.length line))]
-            (if (= (.length (str pre post)) 0)
-              (let [new_buffer (assoc buffer (get-y position) nil)]
-                (assoc state BUFFER new_buffer POSITION new_position))
-              (let [new_buffer (assoc buffer (get-y position) (str pre post))]
-                (assoc state BUFFER new_buffer POSITION new_position)))))
-       ;need to go up one level
-       state)))
+    (if (> (get-x position) 0)
+      (let [line (buffer (get-y position))
+            new_position (move-cursor-left position 1)]
+        (let [pre (.substring line 0 (- (get-x position) 1))
+              post (.substring line (get-x position) (.length line))]
+          (if (= (.length (str pre post)) 0)
+            (let [new_buffer (assoc buffer (get-y position) nil)]
+              (assoc state BUFFER new_buffer POSITION new_position))
+            (let [new_buffer (assoc buffer (get-y position) (str pre post))]
+              (assoc state BUFFER new_buffer POSITION new_position)))))
+      ;need to go up one level
+      state)))
 
 (defn- insert-push-command-stack [state]
   (let [buffer (state BUFFER)

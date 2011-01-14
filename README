@@ -3,6 +3,12 @@
 INFO:
 made for fun. vim clone in clojure.
 
+FEATURE:
+-hjkl movement
+-open (o <filename)
+-write (w <filename>)
+-quit (q)
+
 SETUP:
 download and install:
 clojar.jar

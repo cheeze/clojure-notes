@@ -293,11 +293,13 @@
       (normalize-buffer (reduce merge (map (defn f [k v] {k v}) (range (.length (vec line))) line))))))
 
 (defn- open-command [state command_str]
-  (let [filename (get (.split command_str " ") 1)]
-    (if (and (not (= filename nil)) (not (= (.length filename) 0)))
-      (let [new_buffer (open-filename filename)]
-        (generic-input-key-esc (update-state state POSITION [[0 0]] FILENAME filename BUFFER new_buffer SPECIAL_DISPLAY (str "opening" "\"" filename "\"") MODIFIED false)))
-      (generic-input-key-esc (update-state state SPECIAL_DISPLAY "no file name [:o <filename>]")))))
+  (if (state MODIFIED)
+    (generic-input-key-esc (update-state state SPECIAL_DISPLAY "file modified"))
+    (let [filename (get (.split command_str " ") 1)]
+      (if (and (not (= filename nil)) (not (= (.length filename) 0)))
+        (let [new_buffer (open-filename filename)]
+          (generic-input-key-esc (update-state state POSITION [[0 0]] FILENAME filename BUFFER new_buffer SPECIAL_DISPLAY (str "opening" "\"" filename "\"") MODIFIED false)))
+        (generic-input-key-esc (update-state state SPECIAL_DISPLAY "no file name [:o <filename>]"))))))
 
 (defn- write-out-buffer [filename buffer]
   (with-open [writer (new BufferedWriter (new FileWriter filename))]
@@ -677,10 +679,10 @@
         (do
           (recur (update recursive_state)))))))
 
-(defn main []
+(defn _main [args]
   (do
     (init)
-    (let [filename (if *command-line-args* (.get *command-line-args* 0) nil)]
+    (let [filename (if args (.get args 0) nil)]
       (let [buffer (if filename
                      (open-filename filename)
                      (normalize-buffer {0 ""}))]
@@ -693,4 +695,4 @@
                              MODIFIED false}]
           (main-loop initial_state))))))
 
-(main)
+(_main *command-line-args*)

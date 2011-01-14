@@ -61,6 +61,9 @@
 (defn init []
   (jcurses.system.Toolkit/init))
 
+(defn shutdown []
+  (jcurses.system.Toolkit/shutdown))
+
 (defn get-screen-width []
   (jcurses.system.Toolkit/getScreenWidth))
 
@@ -80,7 +83,7 @@
   (jcurses.system.Toolkit/readCharacter))
 
 (defn move [x y]
-  (jcurses.system.Toolkit/move x y))
+  (jcurses.system.Toolkit/move y x))
 
 ;function declarations
 (declare update-state)
@@ -312,7 +315,9 @@
 (defn- quit-command [state]
   (if (state MODIFIED)
     (generic-input-key-esc (update-state state SPECIAL_DISPLAY "file modified"))
-    (generic-input-key-esc (update-state state SPECIAL_DISPLAY "file not modified"))))
+    (do
+      (shutdown)
+      (System/exit 0))))
 
 ;MODE
 ;helpers
@@ -675,10 +680,10 @@
 (defn main []
   (do
     (init)
-    (let [filename (.get *command-line-args* 0)]
+    (let [filename (if *command-line-args* (.get *command-line-args* 0) nil)]
       (let [buffer (if filename
                      (open-filename filename)
-                     (normalize-buffer nil))]
+                     (normalize-buffer {0 ""}))]
         (let [initial_state {BUFFER buffer
                              POSITION [[0 0]]
                              MODE NORMAL_MODE

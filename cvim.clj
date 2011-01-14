@@ -4,7 +4,9 @@
      (jcurses.system InputChar)
      (jcurses.system CharColor)
      (java.io BufferedWriter)
-     (java.io FileWriter)))
+     (java.io FileWriter)
+     (java.io BufferedReader)
+     (java.io FileReader)))
 
 ;constants
 (def COMMAND_STACK_STR "command stack: ")
@@ -107,6 +109,7 @@
 
 (declare normalize-buffer)
 
+(declare open-filename)
 (declare open-command)
 (declare write-out-buffer)
 (declare write-command)
@@ -263,12 +266,22 @@
     (continue state)))
 
 ;COMMANDS
+(defn- open-filename [filename]
+  (with-open [reader (new BufferedReader (new FileReader filename))]
+    (let [line (line-seq reader)]
+      (normalize-buffer (reduce merge (map (defn f [k v] {k v}) (range (.length (vec line))) line))))))
+
 (defn- open-command [state command_str]
-  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
+  (let [filename (get (.split command_str " ") 1)]
+    (if (and (not (= filename nil)) (not (= (.length filename) 0)))
+      (let [new_buffer (open-filename filename)]
+        (generic-input-key-esc (assoc state FILENAME filename BUFFER new_buffer SPECIAL_DISPLAY (str "opening" "\"" filename "\""))))
+      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))))
 
 (defn- write-out-buffer [filename buffer]
   (with-open [writer (new BufferedWriter (new FileWriter filename))]
-    (doseq [line (vals buffer)] (.write writer line))))
+    (dotimes [i (+ (reduce max (keys buffer)) 1)]
+      (.write writer (str (buffer i) "\n")))))
 
 (defn- write-command [state command_str]
   (let [filename (get (.split command_str " ") 1)]
@@ -320,26 +333,6 @@
   (let [line_count (reduce max (keys buffer))
         create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
     (reduce merge (map create_buffer (range (+ line_count 1))))))
-
-;commands
-(defn- open-command [state command_str]
-  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))
-
-(defn- write-out-buffer [filename buffer]
-  (with-open [writer (new BufferedWriter (new FileWriter filename))]
-    (dotimes [i (+ (reduce max (keys buffer)) 1)]
-      (.write writer (str (buffer i) "\n")))))
-
-(defn- write-command [state command_str]
-  (let [filename (get (.split command_str " ") 1)]
-    (if (and (not (= filename nil)) (not (= (.length filename) 0)))
-      (do
-        (write-out-buffer filename (state BUFFER))
-        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " filename))))
-      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
-
-(defn- quit-command [state]
-  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "file not saved")))
 
 ;generic
 (defn- generic-input-key-esc [state]

@@ -43,6 +43,7 @@
 (def COMMAND_STACK 4)
 (def ANCHOR 5)
 (def FILENAME 6)
+(def MODIFIED 7)
 (def SPECIAL_DISPLAY 20)
 
 ;configuration constants
@@ -82,6 +83,8 @@
   (jcurses.system.Toolkit/move x y))
 
 ;function declarations
+(declare update-state)
+
 (declare move-cursor)
 (declare get-x)
 (declare get-y)
@@ -137,6 +140,21 @@
 (declare insert-input-key)
 (declare insert-remove-input-key)
 (declare insert-push-command-stack)
+
+;global helpers
+(def update-state
+  (fn update-state
+    ([map key val] 
+     (if (= key BUFFER)
+       (assoc map key val MODIFIED true)
+       (assoc map key val)))
+    ([map key val & kvs ]
+     (let [ret (if (= key BUFFER)
+                 (assoc map key val MODIFIED true)
+                 (assoc map key val))]
+       (if kvs
+         (recur ret (first kvs) (second kvs) (nnext kvs))
+         ret)))))
 
 ;display helpers
 (defn- move-cursor [state]
@@ -213,7 +231,7 @@
     (let [position_str (position-to-string position)
           input_key_str (input-key-to-string input_key)
           anchor_str (anchor-to-string anchor)]
-      (str CURRENT_POSITION_STR ": " position_str " - " input_key_str " - " anchor_str))))
+      (str CURRENT_POSITION_STR position_str " key: " input_key_str " anchor: " anchor_str))))
 
 ;DISPLAY
 ;display buffer helper
@@ -235,7 +253,7 @@
         information_bar (construct-information-bar state)
         screen_height (get-screen-height)
         screen_width (get-screen-width)]
-    (print-string information_bar (- screen_width 30) (- screen_height 1))
+    (print-string information_bar (- screen_width 40) (- screen_height 1))
     (if (state SPECIAL_DISPLAY)
       (print-special (state SPECIAL_DISPLAY) 0 (- screen_height 1))
       (print-string status_bar 0 (- screen_height 1)))))
@@ -246,16 +264,16 @@
         anchor (state ANCHOR)]
     (cond
       (> position_y (+ height anchor))
-      (assoc state ANCHOR (- position_y height))
+      (update-state state ANCHOR (- position_y height))
 
       (< position_y anchor)
-      (assoc state ANCHOR position_y)
+      (update-state state ANCHOR position_y)
 
       :else
       state)))
 
 (defn- continue [state]
-  (assoc state INPUT_KEY (read-character) SPECIAL_DISPLAY nil))
+  (update-state state INPUT_KEY (read-character) SPECIAL_DISPLAY nil))
 
 (defn- update [state]
   (let [state (update-anchor state)]
@@ -275,8 +293,8 @@
   (let [filename (get (.split command_str " ") 1)]
     (if (and (not (= filename nil)) (not (= (.length filename) 0)))
       (let [new_buffer (open-filename filename)]
-        (generic-input-key-esc (assoc state FILENAME filename BUFFER new_buffer SPECIAL_DISPLAY (str "opening" "\"" filename "\""))))
-      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:o <filename>]")))))
+        (generic-input-key-esc (update-state state POSITION [[0 0]] FILENAME filename BUFFER new_buffer SPECIAL_DISPLAY (str "opening" "\"" filename "\"") MODIFIED false)))
+      (generic-input-key-esc (update-state state SPECIAL_DISPLAY "no file name [:o <filename>]")))))
 
 (defn- write-out-buffer [filename buffer]
   (with-open [writer (new BufferedWriter (new FileWriter filename))]
@@ -288,11 +306,13 @@
     (if (and (not (= filename nil)) (not (= (.length filename) 0)))
       (do
         (write-out-buffer filename (state BUFFER))
-        (generic-input-key-esc (assoc state FILENAME filename SPECIAL_DISPLAY (str "writing " "\"" filename "\""))))
-      (generic-input-key-esc (assoc state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
+        (generic-input-key-esc (update-state state FILENAME filename SPECIAL_DISPLAY (str "writing " "\"" filename "\""))))
+      (generic-input-key-esc (update-state state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
 
 (defn- quit-command [state]
-  (generic-input-key-esc (assoc state SPECIAL_DISPLAY "file not saved")))
+  (if (state MODIFIED)
+    (generic-input-key-esc (update-state state SPECIAL_DISPLAY "file modified"))
+    (generic-input-key-esc (update-state state SPECIAL_DISPLAY "file not modified"))))
 
 ;MODE
 ;helpers
@@ -330,9 +350,11 @@
   (move-cursor-left position (* n -1)))
 
 (defn- normalize-buffer [buffer]
-  (let [line_count (reduce max (keys buffer))
-        create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
-    (reduce merge (map create_buffer (range (+ line_count 1))))))
+  (if buffer
+    (let [line_count (reduce max (keys buffer))
+          create_buffer (defn f [k] (if (buffer k) {k (buffer k)} {k ""}))]
+      (reduce merge (map create_buffer (range (+ line_count 1)))))
+    {0 ""}))
 
 ;generic
 (defn- generic-input-key-esc [state]
@@ -340,7 +362,7 @@
     (let [new_position [(last position)]
           new_mode NORMAL_MODE
           new_command_stack []]
-      (assoc state MODE new_mode POSITION new_position COMMAND_STACK new_command_stack))))
+      (update-state state MODE new_mode POSITION new_position COMMAND_STACK new_command_stack))))
 
 ;normal mode
 ;evaluate the command stack in normal mode
@@ -357,9 +379,9 @@
     (let [line (buffer new_y)]
       (if (> new_x (.length line))
         (let [new_position [[(.length line) new_y]]]
-          (assoc state POSITION new_position))
+          (update-state state POSITION new_position))
         (let [new_position [[new_x new_y]]]
-          (assoc state POSITION new_position))))))
+          (update-state state POSITION new_position))))))
 
 (defn- normal-move-cursor-up [state]
   (let [position (state POSITION)]
@@ -379,7 +401,7 @@
 (defn- normal-move-cursor-left [state]
   (let [position (state POSITION)]
     (let [new_position (move-cursor-left position 1)]
-      (assoc state POSITION new_position))))
+      (update-state state POSITION new_position))))
 
 (defn- normal-move-cursor-right [state]
   (let [buffer (state BUFFER)
@@ -388,7 +410,7 @@
           line (buffer (get-y position))]
       (if (> (get-x new_position) (.length line))
         state
-        (assoc state POSITION new_position)))))
+        (update-state state POSITION new_position)))))
 
 (defn- normal-push-command-stack [state]
   (let [buffer (state BUFFER)
@@ -404,7 +426,7 @@
 
           :else
           (let [new_command_stack (pop-command-stack command_stack)]
-            (assoc state COMMAND_STACK new_command_stack)))
+            (update-state state COMMAND_STACK new_command_stack)))
 
         :else
         state)
@@ -433,7 +455,7 @@
 
         :else
         (let [new_command_stack (push-command-stack command_stack input_key)]
-          (normal-evaluate-command-stack (assoc state COMMAND_STACK new_command_stack)))))))
+          (normal-evaluate-command-stack (update-state state COMMAND_STACK new_command_stack)))))))
 
 ;switch to command mode
 ;change cursor position when going from normal to command mode
@@ -445,19 +467,19 @@
     (let [new_position (cons [16 (- screen_height 1)] position)
           new_command_stack [NORMAL_TO_COMMAND_MODE_KEY]
           new_mode COMMAND_MODE]
-      (assoc state MODE new_mode POSITION new_position COMMAND_STACK new_command_stack))))
+      (update-state state MODE new_mode POSITION new_position COMMAND_STACK new_command_stack))))
 
 ;switch to insert mode
 (defn- normal-to-insert [state]
   (let [new_command_stack []
         new_mode INSERT_MODE]
-    (assoc state MODE new_mode COMMAND_STACK new_command_stack)))
+    (update-state state MODE new_mode COMMAND_STACK new_command_stack)))
 
 ;switch to visual mode
 (defn- normal-to-visual [state]
   (let [new_command_stack []
         new_mode VISUAL_MODE]
-    (assoc state MODE new_mode COMMAND_STACK new_command_stack)))
+    (update-state state MODE new_mode COMMAND_STACK new_command_stack)))
 
 ;command mode
 ;evaluate the command stack in command mode
@@ -476,7 +498,7 @@
         (quit-command state)
 
         :else
-        (generic-input-key-esc (assoc state SPECIAL_DISPLAY (str "invalid command: " command_str)))))))
+        (generic-input-key-esc (update-state state SPECIAL_DISPLAY (str "invalid command: " command_str)))))))
 
 (defn- command-push-command-stack [state]
   (let [position (state POSITION)
@@ -491,12 +513,12 @@
           (let [new_position [(last position)]
                 new_mode NORMAL_MODE
                 new_command_stack []]
-            (assoc state POSITION new_position MODE new_mode COMMAND_STACK new_command_stack))
+            (update-state state POSITION new_position MODE new_mode COMMAND_STACK new_command_stack))
 
           :else
           (let [new_position (move-cursor-left position 1)
                 new_command_stack (pop-command-stack command_stack)]
-            (assoc state POSITION new_position COMMAND_STACK new_command_stack))))
+            (update-state state POSITION new_position COMMAND_STACK new_command_stack))))
       (cond
         (= (.getCode input_key) KEY_RETURN)
         (command-evaluate-command-stack state)
@@ -504,7 +526,7 @@
         :else
         (let [new_position (move-cursor-right position 1)
               new_command_stack (push-command-stack command_stack input_key)]
-          (assoc state POSITION new_position COMMAND_STACK new_command_stack))))))
+          (update-state state POSITION new_position COMMAND_STACK new_command_stack))))))
 
 ;insert mode
 ;in both functions, y_position defines where the current cursor is
@@ -539,9 +561,9 @@
         (let [pre (.substring line 0 (get-x position))
               post (.substring line (get-x position) (.length line))]
           (let [new_buffer (assoc buffer (get-y position) (str pre (.toString input_key) post))]
-            (assoc state BUFFER new_buffer POSITION new_position)))
+            (update-state state BUFFER new_buffer POSITION new_position)))
         (let [new_buffer (assoc buffer (get-y position) (.toString input_key))]
-          (assoc state BUFFER new_buffer POSITION new_position))))))
+          (update-state state BUFFER new_buffer POSITION new_position))))))
 
 (defn- insert-remove-input-key [state]
   (let [buffer (state BUFFER)
@@ -554,14 +576,14 @@
           ;line above has no text
           (let [new_buffer (insert-move-buffer-up buffer (get-y position))
                 new_position (move-cursor-up position 1)]
-            (assoc state BUFFER new_buffer POSITION new_position))
+            (update-state state BUFFER new_buffer POSITION new_position))
           ;line above has text
           (let [above_line (buffer (- (get-y position) 1))]
             (let [new_buffer (insert-move-buffer-up buffer (get-y position))
                   new_position (move-cursor-right (move-cursor-up position 1) (.length above_line))
                   above_y_position (- (get-y position) 1)]
               (let [new_buffer (assoc new_buffer above_y_position (str above_line (new_buffer above_y_position)))]
-                (assoc state BUFFER new_buffer POSITION new_position)))))
+                (update-state state BUFFER new_buffer POSITION new_position)))))
         ;at top line, should not move
         state)
       ;backspace at anywhere in the line
@@ -571,9 +593,9 @@
               post (.substring line (get-x position) (.length line))]
           (if (= (.length (str pre post)) 0)
             (let [new_buffer (assoc buffer (get-y position) "")]
-              (assoc state BUFFER new_buffer POSITION new_position))
+              (update-state state BUFFER new_buffer POSITION new_position))
             (let [new_buffer (assoc buffer (get-y position) (str pre post))]
-              (assoc state BUFFER new_buffer POSITION new_position))))))))
+              (update-state state BUFFER new_buffer POSITION new_position))))))))
 
 (defn- insert-return-input-key [state]
   (let [buffer (state BUFFER)
@@ -583,7 +605,7 @@
       ;return at beginning of line
       (let [new_buffer (assoc (insert-move-buffer-down buffer (get-y position)) (get-y position) "")
             new_position (move-cursor-down position 1)]
-        (assoc state BUFFER new_buffer POSITION new_position))
+        (update-state state BUFFER new_buffer POSITION new_position))
       ;return at anywhere else
       (let [line (buffer (get-y position))]
         (let [pre (.substring line 0 (get-x position))
@@ -591,7 +613,7 @@
           (let [new_buffer (insert-move-buffer-down buffer (get-y position))]
             (let [new_buffer (assoc (assoc new_buffer (get-y position) pre) (+ (get-y position) 1) post)
                   new_position (move-cursor-left (move-cursor-down position 1) (.length pre))]
-              (assoc state BUFFER new_buffer POSITION new_position))))))))
+              (update-state state BUFFER new_buffer POSITION new_position))))))))
 
 (defn- insert-push-command-stack [state]
   (let [buffer (state BUFFER)
@@ -653,12 +675,17 @@
 (defn main []
   (do
     (init)
-    (let [initial_state {BUFFER (normalize-buffer {0 ""})
-                         POSITION [[0 0]]
-                         MODE NORMAL_MODE
-                         INPUT_KEY nil
-                         COMMAND_STACK []
-                         ANCHOR 0}]
-      (main-loop initial_state))))
+    (let [filename (.get *command-line-args* 0)]
+      (let [buffer (if filename
+                     (open-filename filename)
+                     (normalize-buffer nil))]
+        (let [initial_state {BUFFER buffer
+                             POSITION [[0 0]]
+                             MODE NORMAL_MODE
+                             INPUT_KEY nil
+                             COMMAND_STACK []
+                             ANCHOR 0
+                             MODIFIED false}]
+          (main-loop initial_state))))))
 
 (main)

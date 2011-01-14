@@ -309,7 +309,7 @@
     (if (and (not (= filename nil)) (not (= (.length filename) 0)))
       (do
         (write-out-buffer filename (state BUFFER))
-        (generic-input-key-esc (update-state state FILENAME filename SPECIAL_DISPLAY (str "writing " "\"" filename "\""))))
+        (generic-input-key-esc (update-state state FILENAME filename SPECIAL_DISPLAY (str "writing " "\"" filename "\"") MODIFIED false)))
       (generic-input-key-esc (update-state state SPECIAL_DISPLAY "no file name [:w <filename>]")))))
 
 (defn- quit-command [state]

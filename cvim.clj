@@ -44,6 +44,7 @@
 (def ANCHOR 5)
 (def FILENAME 6)
 (def MODIFIED 7)
+(def LINE_WRAPS 8)
 (def SPECIAL_DISPLAY 20)
 
 ;configuration constants
@@ -87,6 +88,7 @@
 
 ;function declarations
 (declare update-state)
+(declare generate-line-wraps)
 
 (declare move-cursor)
 (declare get-x)
@@ -145,6 +147,8 @@
 (declare insert-push-command-stack)
 
 ;global helpers
+;TODO: this is where we should check if ANCHOR exists; in which case, we update the LINE_WRAP array
+;note that when we are drawing the buffer out, it should also be based off the LINE_WRAP array
 (def update-state
   (fn update-state
     ([map key val] 
@@ -158,6 +162,9 @@
        (if kvs
          (recur ret (first kvs) (second kvs) (nnext kvs))
          ret)))))
+
+(defn- generate-line-wraps [state]
+  {})
 
 ;display helpers
 (defn- move-cursor [state]
@@ -356,6 +363,7 @@
 (defn- move-cursor-right [position n]
   (move-cursor-left position (* n -1)))
 
+;more useful helpers
 (defn- normalize-buffer [buffer]
   (if buffer
     (let [line_count (reduce max (keys buffer))
@@ -687,6 +695,7 @@
                      (open-filename filename)
                      (normalize-buffer {0 ""}))]
         (let [initial_state {BUFFER buffer
+                             LINE_WRAPS {}
                              POSITION [[0 0]]
                              MODE NORMAL_MODE
                              INPUT_KEY nil
